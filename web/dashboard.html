@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTC Predictor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-banner {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .status-banner.collecting {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .status-banner.ready {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        select {
+            background: white;
+            min-width: 200px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .prediction-card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .prediction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .market-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .price {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .prediction-body {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .prediction-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .prediction-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .prediction-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .direction-up {
+            color: #10b981;
+        }
+
+        .direction-down {
+            color: #ef4444;
+        }
+
+        .direction-none {
+            color: #94a3b8;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .indicator {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .indicator-name {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .indicator-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .reason {
+            background: #fef3c7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .reason.collecting {
+            background: #dbeafe;
+            border-left-color: #3b82f6;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .stat-header {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .timestamp {
+            text-align: center;
+            color: white;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .trade-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .trade-button {
+            flex: 1;
+            padding: 20px;
+            font-size: 1.3em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .trade-up {
+            background: #10b981;
+            color: white;
+        }
+
+        .trade-up:hover:not(:disabled) {
+            background: #059669;
+            transform: scale(1.05);
+        }
+
+        .trade-down {
+            background: #ef4444;
+            color: white;
+        }
+
+        .trade-down:hover:not(:disabled) {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+
+        .trade-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 OTC Predictor Dashboard</h1>
+
+        <div id="statusBanner" style="display: none;"></div>
+
+        <div class="controls">
+            <label>
+                <strong>Market:</strong>
+                <select id="marketSelect">
+                    <option value="">Loading markets...</option>
+                </select>
+            </label>
+
+            <label>
+                <strong>Duration:</strong>
+                <select id="durationSelect">
+                    <option value="30">30 seconds</option>
+                    <option value="60" selected>60 seconds</option>
+                    <option value="120">2 minutes</option>
+                    <option value="180">3 minutes</option>
+                    <option value="300">5 minutes</option>
+                </select>
+            </label>
+
+            <button onclick="fetchPrediction()" id="getPredBtn">Get Prediction</button>
+            <button onclick="toggleWebSocket()" id="wsBtn">
+                <span class="live-indicator"></span>
+                <span id="wsButtonText">Start Live</span>
+            </button>
+        </div>
+
+        <div id="predictionContainer">
+            <div class="loading">Select a market and click "Get Prediction"</div>
+        </div>
+
+        <div class="stats-grid" id="statsContainer"></div>
+
+        <div class="timestamp" id="lastUpdate"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let wsActive = false;
+
+        // Load markets on page load
+        async function loadMarkets() {
+            try {
+                const response = await fetch('/api/markets');
+                const markets = await response.json();
+                
+                const select = document.getElementById('marketSelect');
+                select.innerHTML = markets.map(m => 
+                    `<option value="${m.market}">${m.market} (${m.tick_count} ticks)</option>`
+                ).join('');
+
+                if (markets.length > 0) {
+                    fetchPrediction();
+                    loadStats();
+                }
+            } catch (error) {
+                console.error('Error loading markets:', error);
+            }
+        }
+
+        // Check data collection status
+        function checkDataStatus(prediction) {
+            const banner = document.getElementById('statusBanner');
+            
+            if (prediction.direction === 'NONE' && prediction.reason && prediction.reason.includes('Collecting data')) {
+                // Extract tick counts from reason
+                const match = prediction.reason.match(/(\d+)\/(\d+) ticks/);
+                if (match) {
+                    const current = parseInt(match[1]);
+                    const required = parseInt(match[2]);
+                    const percentage = (current / required * 100).toFixed(0);
+                    
+                    banner.className = 'status-banner collecting';
+                    banner.innerHTML = `
+                        📊 Collecting Market Data: ${current}/${required} ticks (${percentage}%)
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    `;
+                    banner.style.display = 'block';
+                    return true;
+                }
+            } else if (prediction.direction !== 'NONE') {
+                banner.className = 'status-banner ready';
+                banner.innerHTML = '✅ System Ready - Making Predictions';
+                banner.style.display = 'block';
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 3000);
+            }
+            
+            return false;
+        }
+
+        // Fetch prediction
+        async function fetchPrediction() {
+            const market = document.getElementById('marketSelect').value;
+            const duration = document.getElementById('durationSelect').value;
+
+            if (!market) return;
+
+            try {
+                const response = await fetch(`/api/predict/${market}/${duration}`);
+                const prediction = await response.json();
+                
+                checkDataStatus(prediction);
+                displayPrediction(prediction);
+                updateTimestamp();
+            } catch (error) {
+                console.error('Error fetching prediction:', error);
+            }
+        }
+
+        // Display prediction
+        function displayPrediction(pred) {
+            const directionClass = pred.direction.toLowerCase() === 'up' ? 'direction-up' : 
+                                   pred.direction.toLowerCase() === 'down' ? 'direction-down' : 
+                                   'direction-none';
+
+            const confidencePercent = (pred.confidence * 100).toFixed(1);
+            const canTrade = pred.direction !== 'NONE' && pred.confidence > 0.5;
+            const isCollecting = pred.direction === 'NONE' && pred.reason && pred.reason.includes('Collecting data');
+
+            const html = `
+                <div class="prediction-card">
+                    <div class="prediction-header">
+                        <div class="market-name">${pred.market}</div>
+                        <div class="price">$${pred.current_price ? pred.current_price.toFixed(5) : 'N/A'}</div>
+                    </div>
+
+                    <div class="prediction-body">
+                        <div class="prediction-item">
+                            <div class="prediction-label">Direction</div>
+                            <div class="prediction-value ${directionClass}">
+                                ${pred.direction === 'UP' ? '↑ ' : pred.direction === 'DOWN' ? '↓ ' : '⊘ '}
+                                ${pred.direction}
+                            </div>
+                        </div>
+
+                        <div class="prediction-item">
+                            <div class="prediction-label">Confidence</div>
+                            <div class="prediction-value">${confidencePercent}%</div>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${confidencePercent}%">
+                                    ${confidencePercent}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="prediction-item">
+                            <div class="prediction-label">Duration</div>
+                            <div class="prediction-value">${pred.duration}s</div>
+                        </div>
+
+                        <div class="prediction-item">
+                            <div class="prediction-label">Data Points</div>
+                            <div class="prediction-value">${pred.data_points || 0}</div>
+                        </div>
+                    </div>
+
+                    ${pred.reason ? `<div class="reason ${isCollecting ? 'collecting' : ''}">${isCollecting ? '⏳ ' : ''}${pred.reason}</div>` : ''}
+
+                    ${pred.indicators ? `
+                        <div class="indicators">
+                            <div class="indicator">
+                                <div class="indicator-name">RSI</div>
+                                <div class="indicator-value">${pred.indicators.rsi.toFixed(1)}</div>
+                            </div>
+                            <div class="indicator">
+                                <div class="indicator-name">EMA 9</div>
+                                <div class="indicator-value">${pred.indicators.ema_9.toFixed(5)}</div>
+                            </div>
+                            <div class="indicator">
+                                <div class="indicator-name">EMA 21</div>
+                                <div class="indicator-value">${pred.indicators.ema_21.toFixed(5)}</div>
+                            </div>
+                            <div class="indicator">
+                                <div class="indicator-name">BB Position</div>
+                                <div class="indicator-value">${pred.indicators.bb_position.toFixed(2)}</div>
+                            </div>
+                            <div class="indicator">
+                                <div class="indicator-name">Volatility</div>
+                                <div class="indicator-value">${pred.indicators.volatility.toFixed(5)}</div>
+                            </div>
+                            <div class="indicator">
+                                <div class="indicator-name">Momentum</div>
+                                <div class="indicator-value">${pred.indicators.momentum.toFixed(2)}</div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="trade-buttons">
+                        <button class="trade-button trade-up" ${!canTrade ? 'disabled' : ''}>
+                            ${canTrade ? 'TRADE UP ⬆️' : 'WAITING FOR DATA...'}
+                        </button>
+                        <button class="trade-button trade-down" ${!canTrade ? 'disabled' : ''}>
+                            ${canTrade ? 'TRADE DOWN ⬇️' : 'WAITING FOR DATA...'}
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('predictionContainer').innerHTML = html;
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                let html = '';
+                for (const [market, stat] of Object.entries(stats)) {
+                    if (stat.total_trades > 0) {
+                        html += `
+                            <div class="stat-card">
+                                <div class="stat-header">${market}</div>
+                                <div class="stat-value">${stat.win_rate.toFixed(1)}%</div>
+                                <div style="margin-top: 10px; font-size: 0.9em;">
+                                    Trades: ${stat.total_trades} | 
+                                    W/L: ${stat.wins}/${stat.losses} |
+                                    P/L: $${stat.total_profit_loss.toFixed(2)}
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                if (html) {
+                    document.getElementById('statsContainer').innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // WebSocket connection
+        function toggleWebSocket() {
+            if (wsActive) {
+                stopWebSocket();
+            } else {
+                startWebSocket();
+            }
+        }
+
+        function startWebSocket() {
+            const market = document.getElementById('marketSelect').value;
+            const duration = document.getElementById('durationSelect').value;
+
+            if (!market) {
+                alert('Please select a market first');
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/api/stream/${market}?duration=${duration}`;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                wsActive = true;
+                document.getElementById('wsButtonText').textContent = 'Stop Live';
+                console.log('WebSocket connected');
+            };
+
+            ws.onmessage = (event) => {
+                const prediction = JSON.parse(event.data);
+                checkDataStatus(prediction);
+                displayPrediction(prediction);
+                updateTimestamp();
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                wsActive = false;
+                document.getElementById('wsButtonText').textContent = 'Start Live';
+                console.log('WebSocket disconnected');
+            };
+        }
+
+        function stopWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function updateTimestamp() {
+            const now = new Date().toLocaleString();
+            document.getElementById('lastUpdate').textContent = `Last updated: ${now}`;
+        }
+
+        // Initialize
+        loadMarkets();
+        setInterval(loadStats, 60000); // Update stats every minute
+        
+        // Auto-refresh while collecting data
+        setInterval(() => {
+            if (!wsActive) {
+                const banner = document.getElementById('statusBanner');
+                if (banner.style.display !== 'none' && banner.classList.contains('collecting')) {
+                    fetchPrediction();
+                }
+            }
+        }, 5000); // Check every 5 seconds
+    </script>
+</body>
+</html>

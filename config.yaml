@@ -1,0 +1,83 @@
+# OTC Predictor Configuration - OPTIMIZED FOR HIGH WIN RATE
+
+# Markets to track
+markets:
+  - volatility_10_1s
+  - volatility_25_1s
+  - volatility_50_1s
+  - volatility_75_1s
+  - volatility_100_1s
+  - crash_300_1s
+  - crash_500_1s
+  - crash_1000_1s
+  - boom_300_1s
+  - boom_500_1s
+  - boom_1000_1s
+
+# Data source (Deriv.com WebSocket API)
+datasource:
+  api_url: "wss://ws.derivws.com/websockets/v3?app_id=1089"
+  reconnect_delay: 5  # seconds
+  ping_interval: 25   # seconds (reduced to 25 for better stability)
+
+# Strategy Parameters - TUNED FOR HIGHER WIN RATE
+strategy:
+  # Minimum confidence to make prediction (STRICT)
+  min_confidence: 0.70  # Increased from 0.65 to 0.70 for quality
+
+  # Technical Indicators
+  rsi_period: 14
+  rsi_overbought: 72    # More conservative (was 75)
+  rsi_oversold: 28      # More conservative (was 25)
+  
+  ema_fast: 9
+  ema_slow: 21
+  ema_trend: 50
+  
+  bb_period: 20
+  bb_std_dev: 2.0
+
+  # Volatility Index Strategy Weights
+  volatility:
+    mean_reversion_weight: 0.45  # Increased - strongest signal
+    momentum_weight: 0.35        # Increased
+    pattern_weight: 0.20         # Decreased
+
+  # Crash/Boom Strategy Weights
+  crash_boom:
+    spike_detection_weight: 0.50
+    trend_weight: 0.30
+    volatility_weight: 0.20
+
+# Risk Management - OPTIMIZED
+risk:
+  max_predictions_per_minute: 30  # Increased from 10 to 30
+  min_ticks_required: 60           # Reduced from 200 to 60 for faster start
+  skip_high_volatility_threshold: 0.03  # Stricter (was 0.05)
+  max_spread_pips: 2.5             # Stricter (was 3)
+
+# Storage
+storage:
+  max_ticks_in_memory: 500        # Reduced from 1000 (we don't need that much)
+  keep_predictions_hours: 12      # Reduced from 24 (save memory)
+  auto_cleanup_interval: 1800     # 30 minutes (was 1 hour)
+
+# API Server
+api:
+  host: "0.0.0.0"
+  port: 8080
+  enable_cors: true
+  websocket_enabled: true
+  max_connections: 50             # Reduced from 100 (more realistic)
+
+# Logging
+logging:
+  level: "info"                   # debug, info, warn, error
+  file: "otc-predictor.log"
+  console: true
+
+# Performance Tracking
+tracking:
+  calculate_stats_interval: 60    # seconds
+  min_trades_for_stats: 5         # Reduced from 10 for faster feedback
+  display_recent_trades: 20
