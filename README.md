@@ -29,7 +29,7 @@ High-accuracy prediction system for OTC (Over-The-Counter) markets including Vol
 
 ```bash
 # Clone repository
-git clone <your-repo>
+git https://github.com/gatiella/otc-predictor.git
 cd otc-predictor
 
 # Install dependencies
