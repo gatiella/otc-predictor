@@ -67,6 +67,9 @@ func (s *Server) SetupRoutes() {
 	// Markets
 	api.Get("/markets", s.handler.GetMarkets)
 
+	// ⭐ NEW: Best trading opportunities
+	api.Get("/best-markets", s.handler.GetBestMarkets)
+
 	// Predictions
 	api.Get("/predict/:market/:duration", s.handler.GetPrediction)
 	api.Get("/predict/all/:duration", s.handler.GetAllPredictions)
@@ -115,9 +118,9 @@ func (s *Server) Start() error {
 	s.SetupRoutes()
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-
 	log.Printf("🌐 API Server starting on http://%s", addr)
 	log.Printf("📊 Dashboard: http://%s", addr)
+	log.Printf("🎯 Best Markets API: http://%s/api/best-markets", addr)
 	log.Printf("📡 WebSocket: ws://%s/api/stream/:market", addr)
 
 	return s.app.Listen(addr)

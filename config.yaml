@@ -1,7 +1,13 @@
-# OTC Predictor Configuration - OPTIMIZED FOR HIGH WIN RATE
+# OTC Predictor Configuration - MULTI-MODE SYSTEM
+# Dashboard allows switching between modes, but you can set default here
 
-# Markets to track
-markets:
+# Default Mode (dashboard can filter any mode)
+# Options: "synthetics", "forex", "both"
+# Set to "both" to enable all markets and let dashboard filter
+mode: "both"
+
+# Synthetic Indices Markets
+synthetic_markets:
   - volatility_10_1s
   - volatility_25_1s
   - volatility_50_1s
@@ -14,21 +20,37 @@ markets:
   - boom_500_1s
   - boom_1000_1s
 
+# Forex Markets
+forex_markets:
+  - frxAUDJPY
+  - frxEURAUD
+  - frxEURCAD
+  - frxEURCHF
+  - frxEURGBP
+  - frxEURUSD
+  - frxGBPAUD
+  - frxGBPJPY
+  - frxGBPUSD
+  - frxUSDCAD
+  - frxUSDCHF
+  - frxUSDJPY
+
 # Data source (Deriv.com WebSocket API)
 datasource:
   api_url: "wss://ws.derivws.com/websockets/v3?app_id=1089"
-  reconnect_delay: 5  # seconds
-  ping_interval: 25   # seconds (reduced to 25 for better stability)
+  api_token: ""  # Optional: Add your token here for authenticated features
+  reconnect_delay: 5
+  ping_interval: 25
 
-# Strategy Parameters - TUNED FOR HIGHER WIN RATE
+# Strategy Parameters
 strategy:
-  # Minimum confidence to make prediction (STRICT)
-  min_confidence: 0.70  # Increased from 0.65 to 0.70 for quality
+  # Global minimum confidence
+  min_confidence: 0.70
 
-  # Technical Indicators
+  # Technical Indicators (shared by all strategies)
   rsi_period: 14
-  rsi_overbought: 72    # More conservative (was 75)
-  rsi_oversold: 28      # More conservative (was 25)
+  rsi_overbought: 72
+  rsi_oversold: 28
   
   ema_fast: 9
   ema_slow: 21
@@ -37,30 +59,56 @@ strategy:
   bb_period: 20
   bb_std_dev: 2.0
 
-  # Volatility Index Strategy Weights
+  # Synthetics Strategy Weights
   volatility:
-    mean_reversion_weight: 0.45  # Increased - strongest signal
-    momentum_weight: 0.35        # Increased
-    pattern_weight: 0.20         # Decreased
+    mean_reversion_weight: 0.45
+    momentum_weight: 0.35
+    pattern_weight: 0.20
 
-  # Crash/Boom Strategy Weights
   crash_boom:
     spike_detection_weight: 0.50
     trend_weight: 0.30
     volatility_weight: 0.20
 
-# Risk Management - OPTIMIZED
+  # Forex Strategy Weights
+  forex:
+    trend_following_weight: 0.40
+    support_resistance_weight: 0.35
+    ema_crossover_weight: 0.35
+    pullback_weight: 0.30
+    range_weight: 0.25
+
+# Risk Management
 risk:
-  max_predictions_per_minute: 30  # Increased from 10 to 30
-  min_ticks_required: 60           # Reduced from 200 to 60 for faster start
-  skip_high_volatility_threshold: 0.03  # Stricter (was 0.05)
-  max_spread_pips: 2.5             # Stricter (was 3)
+  # Global defaults (if specific settings not found)
+  max_predictions_per_minute: 30
+  min_ticks_required: 60
+  skip_high_volatility_threshold: 0.03
+  max_spread_pips: 2.5
+  
+  # Synthetics-specific settings
+  synthetics:
+    max_predictions_per_minute: 30
+    min_ticks_required: 60
+    skip_high_volatility_threshold: 0.03
+    preferred_duration: 60  # 1 minute (best for synthetics)
+  
+  # Forex-specific settings
+  forex:
+    max_predictions_per_minute: 20
+    min_ticks_required: 200  # Need more data for 15min predictions
+    skip_high_volatility_threshold: 0.025
+    preferred_duration: 900  # 15 minutes (MINIMUM for forex on Deriv)
+    
+    # Forex session filters
+    avoid_asian_session: true          # Avoid 00:00-07:00 UTC (low volume)
+    boost_london_ny_overlap: true      # Boost confidence 12:00-16:00 UTC
 
 # Storage
 storage:
-  max_ticks_in_memory: 500        # Reduced from 1000 (we don't need that much)
-  keep_predictions_hours: 12      # Reduced from 24 (save memory)
-  auto_cleanup_interval: 1800     # 30 minutes (was 1 hour)
+  max_ticks_in_memory: 500    # Per market
+  keep_predictions_hours: 12
+  auto_cleanup_interval: 1800  # 30 minutes
 
 # API Server
 api:
@@ -68,16 +116,17 @@ api:
   port: 8080
   enable_cors: true
   websocket_enabled: true
-  max_connections: 50             # Reduced from 100 (more realistic)
+  max_connections: 50
 
 # Logging
 logging:
-  level: "info"                   # debug, info, warn, error
+  level: "info"  # debug, info, warn, error
   file: "otc-predictor.log"
   console: true
 
 # Performance Tracking
 tracking:
-  calculate_stats_interval: 60    # seconds
-  min_trades_for_stats: 5         # Reduced from 10 for faster feedback
+  calculate_stats_interval: 60  # seconds
+  min_trades_for_stats: 5
   display_recent_trades: 20
+  separate_stats_by_type: true  # Separate forex vs synthetics stats

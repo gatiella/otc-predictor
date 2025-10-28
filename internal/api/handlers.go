@@ -2,12 +2,14 @@ package api
 
 import (
 	"log"
+	"sort"
 	"strconv"
 	"time"
 
 	"otc-predictor/internal/predictor"
 	"otc-predictor/internal/storage"
 	"otc-predictor/internal/tracker"
+	"otc-predictor/pkg/types"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
@@ -26,6 +28,203 @@ func NewHandler(engine *predictor.Engine, storage *storage.MemoryStorage, tracke
 		engine:  engine,
 		storage: storage,
 		tracker: tracker,
+	}
+}
+
+// MarketOpportunity represents a trading opportunity with quality score
+type MarketOpportunity struct {
+	Market       string    `json:"market"`
+	MarketType   string    `json:"market_type"`
+	Direction    string    `json:"direction"`
+	Confidence   float64   `json:"confidence"`
+	QualityScore float64   `json:"quality_score"`
+	CurrentPrice float64   `json:"current_price"`
+	Duration     int       `json:"duration"`
+	DataPoints   int       `json:"data_points"`
+	Reason       string    `json:"reason"`
+	WinRate      float64   `json:"win_rate,omitempty"`
+	TotalTrades  int       `json:"total_trades,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+// GetBestMarkets analyzes all markets and returns top opportunities
+// GET /api/best-markets?duration=60&limit=5&mode=synthetics
+func (h *Handler) GetBestMarkets(c *fiber.Ctx) error {
+	durationStr := c.Query("duration", "60")
+	limitStr := c.Query("limit", "5")
+	mode := c.Query("mode", "synthetics") // synthetics, forex, both
+
+	duration, err := strconv.Atoi(durationStr)
+	if err != nil || duration < 30 || duration > 3600 {
+		duration = 60
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 || limit > 20 {
+		limit = 5
+	}
+
+	// Get all active markets
+	allMarkets := h.storage.GetActiveMarkets()
+
+	// Filter by mode
+	var filteredMarkets []string
+	for _, market := range allMarkets {
+		marketType := getMarketType(market)
+
+		switch mode {
+		case "synthetics":
+			if marketType == "volatility" || marketType == "crash_boom" {
+				filteredMarkets = append(filteredMarkets, market)
+			}
+		case "forex":
+			if marketType == "forex" {
+				filteredMarkets = append(filteredMarkets, market)
+			}
+		case "both":
+			filteredMarkets = append(filteredMarkets, market)
+		}
+	}
+
+	if len(filteredMarkets) == 0 {
+		return c.JSON(fiber.Map{
+			"opportunities": []MarketOpportunity{},
+			"message":       "No markets available for selected mode",
+			"mode":          mode,
+		})
+	}
+
+	// Analyze all markets
+	opportunities := []MarketOpportunity{}
+
+	for _, market := range filteredMarkets {
+		pred, err := h.engine.Predict(market, duration)
+		if err != nil {
+			continue
+		}
+
+		// Skip if no clear direction or low confidence
+		if pred.Direction == "NONE" || pred.Confidence < 0.65 {
+			continue
+		}
+
+		// Get historical stats
+		stats := h.storage.GetStats(market)
+
+		// Calculate quality score (0-100)
+		qualityScore := calculateQualityScore(pred, stats)
+
+		opportunity := MarketOpportunity{
+			Market:       pred.Market,
+			MarketType:   getMarketType(pred.Market),
+			Direction:    pred.Direction,
+			Confidence:   pred.Confidence,
+			QualityScore: qualityScore,
+			CurrentPrice: pred.CurrentPrice,
+			Duration:     pred.Duration,
+			DataPoints:   pred.DataPoints,
+			Reason:       pred.Reason,
+			Timestamp:    pred.Timestamp,
+		}
+
+		// Add stats if available
+		if stats != nil && stats.TotalTrades > 0 {
+			opportunity.WinRate = stats.WinRate
+			opportunity.TotalTrades = stats.TotalTrades
+		}
+
+		opportunities = append(opportunities, opportunity)
+	}
+
+	// Sort by quality score (highest first)
+	sort.Slice(opportunities, func(i, j int) bool {
+		return opportunities[i].QualityScore > opportunities[j].QualityScore
+	})
+
+	// Limit results
+	if len(opportunities) > limit {
+		opportunities = opportunities[:limit]
+	}
+
+	return c.JSON(fiber.Map{
+		"opportunities":  opportunities,
+		"total_analyzed": len(filteredMarkets),
+		"total_found":    len(opportunities),
+		"mode":           mode,
+		"duration":       duration,
+		"timestamp":      time.Now(),
+	})
+}
+
+// calculateQualityScore computes a 0-100 quality score for a prediction
+func calculateQualityScore(pred types.Prediction, stats *types.Stats) float64 {
+	score := 0.0
+
+	// 1. Confidence weight (40 points max)
+	confidenceScore := pred.Confidence * 40.0
+
+	// 2. Historical win rate (30 points max)
+	winRateScore := 0.0
+	if stats != nil && stats.TotalTrades >= 5 {
+		winRateScore = (stats.WinRate / 100.0) * 30.0
+	} else {
+		// No history = neutral score
+		winRateScore = 15.0
+	}
+
+	// 3. Data quality (20 points max)
+	dataQualityScore := 0.0
+	if pred.DataPoints >= 150 {
+		dataQualityScore = 20.0
+	} else if pred.DataPoints >= 100 {
+		dataQualityScore = 15.0
+	} else if pred.DataPoints >= 60 {
+		dataQualityScore = 10.0
+	} else {
+		dataQualityScore = 5.0
+	}
+
+	// 4. Recent performance (10 points max)
+	streakScore := 0.0
+	if stats != nil {
+		if stats.CurrentStreak > 0 {
+			streakScore = 10.0 // On a winning streak
+		} else if stats.CurrentStreak < -2 {
+			streakScore = 0.0 // On a losing streak
+		} else {
+			streakScore = 5.0 // Neutral
+		}
+	} else {
+		streakScore = 5.0
+	}
+
+	score = confidenceScore + winRateScore + dataQualityScore + streakScore
+
+	// Clamp to 0-100
+	if score > 100 {
+		score = 100
+	}
+	if score < 0 {
+		score = 0
+	}
+
+	return score
+}
+
+// getMarketType determines market category
+func getMarketType(market string) string {
+	m := market
+	if len(m) > 3 {
+		m = m[:3]
+	}
+
+	switch m {
+	case "frx", "AUD", "EUR", "GBP", "USD", "JPY", "CHF", "CAD", "NZD":
+		return "forex"
+	case "cra", "boo":
+		return "crash_boom"
+	default:
+		return "volatility"
 	}
 }
 

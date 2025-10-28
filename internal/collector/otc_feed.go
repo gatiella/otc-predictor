@@ -3,6 +3,7 @@ package collector
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,12 +80,12 @@ func NewOTCCollector(storage *storage.MemoryStorage, config types.DataSourceConf
 
 // Start begins collecting data
 func (c *OTCCollector) Start() error {
-	log.Println("🚀 Starting OTC data collector...")
+	log.Println("🚀 Starting multi-market data collector...")
 
 	// Start connection manager for each batch
 	for batchIdx, batch := range c.marketBatches {
 		go c.connectionManager(batchIdx, batch)
-		// Stagger connection starts to avoid overwhelming API
+		// Stagger connection starts
 		time.Sleep(2 * time.Second)
 	}
 
@@ -287,6 +288,7 @@ func (c *OTCCollector) keepAlive(connKey string) {
 // marketToSymbol converts our market name to Deriv symbol
 func (c *OTCCollector) marketToSymbol(market string) string {
 	symbolMap := map[string]string{
+		// Synthetic indices
 		"volatility_10_1s":  "R_10",
 		"volatility_25_1s":  "R_25",
 		"volatility_50_1s":  "R_50",
@@ -298,18 +300,34 @@ func (c *OTCCollector) marketToSymbol(market string) string {
 		"boom_300_1s":       "BOOM300",
 		"boom_500_1s":       "BOOM500",
 		"boom_1000_1s":      "BOOM1000",
+
+		// Forex pairs
+		"frxAUDJPY": "frxAUDJPY",
+		"frxEURAUD": "frxEURAUD",
+		"frxEURCAD": "frxEURCAD",
+		"frxEURCHF": "frxEURCHF",
+		"frxEURGBP": "frxEURGBP",
+		"frxEURUSD": "frxEURUSD",
+		"frxGBPAUD": "frxGBPAUD",
+		"frxGBPJPY": "frxGBPJPY",
+		"frxGBPUSD": "frxGBPUSD",
+		"frxUSDCAD": "frxUSDCAD",
+		"frxUSDCHF": "frxUSDCHF",
+		"frxUSDJPY": "frxUSDJPY",
 	}
 
 	if symbol, exists := symbolMap[market]; exists {
 		return symbol
 	}
 
+	// If not found, return as-is (might be a custom format)
 	return market
 }
 
 // symbolToMarket converts Deriv symbol to our market name
 func (c *OTCCollector) symbolToMarket(symbol string) string {
 	marketMap := map[string]string{
+		// Synthetic indices
 		"R_10":      "volatility_10_1s",
 		"R_25":      "volatility_25_1s",
 		"R_50":      "volatility_50_1s",
@@ -321,13 +339,33 @@ func (c *OTCCollector) symbolToMarket(symbol string) string {
 		"BOOM300":   "boom_300_1s",
 		"BOOM500":   "boom_500_1s",
 		"BOOM1000":  "boom_1000_1s",
+
+		// Forex pairs (direct mapping)
+		"frxAUDJPY": "frxAUDJPY",
+		"frxEURAUD": "frxEURAUD",
+		"frxEURCAD": "frxEURCAD",
+		"frxEURCHF": "frxEURCHF",
+		"frxEURGBP": "frxEURGBP",
+		"frxEURUSD": "frxEURUSD",
+		"frxGBPAUD": "frxGBPAUD",
+		"frxGBPJPY": "frxGBPJPY",
+		"frxGBPUSD": "frxGBPUSD",
+		"frxUSDCAD": "frxUSDCAD",
+		"frxUSDCHF": "frxUSDCHF",
+		"frxUSDJPY": "frxUSDJPY",
 	}
 
 	if market, exists := marketMap[symbol]; exists {
 		return market
 	}
 
+	// If not found, return as-is
 	return symbol
+}
+
+// IsForexSymbol checks if a symbol is forex
+func (c *OTCCollector) IsForexSymbol(symbol string) bool {
+	return strings.HasPrefix(strings.ToLower(symbol), "frx")
 }
 
 // Stop stops the collector
@@ -344,5 +382,5 @@ func (c *OTCCollector) Stop() {
 		delete(c.connections, key)
 	}
 
-	log.Println("🛑 OTC collector stopped")
+	log.Println("🛑 Multi-market collector stopped")
 }
