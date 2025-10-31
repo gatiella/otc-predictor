@@ -3,6 +3,7 @@ package strategy
 import (
 	"fmt"
 	"math"
+	"otc-predictor/internal/candles"
 	"otc-predictor/internal/indicators"
 	"otc-predictor/pkg/types"
 )
@@ -40,7 +41,8 @@ func (s *CombinedStrategy) GeneratePrediction(market string, ticks []types.Tick,
 	minRequired := s.getMinimumRequired(duration, marketType)
 
 	if len(ticks) < minRequired {
-		prediction.Reason = fmt.Sprintf("Collecting data: %d/%d ticks needed", len(ticks), minRequired)
+		prediction.Reason = fmt.Sprintf("Collecting data: %d/%d ticks needed (~%d min)",
+			len(ticks), minRequired, (minRequired-len(ticks))/2)
 		prediction.Confidence = 0
 		return prediction
 	}
@@ -50,7 +52,13 @@ func (s *CombinedStrategy) GeneratePrediction(market string, ticks []types.Tick,
 	prediction.Indicators = inds
 	prediction.CurrentPrice = ticks[len(ticks)-1].Price
 
-	// Pre-filter: Skip poor market conditions
+	// ✨ Check for RSI Divergence (very reliable signal)
+	divergence := indicators.DetectRSIDivergence(ticks, s.config)
+
+	// ✨ Check for advanced patterns
+	pattern := indicators.DetectAdvancedPatterns(ticks)
+
+	// ✅ ULTRA-RELAXED pre-filter - only block extreme chaos
 	if !s.isMarketTradeable(inds, ticks, marketType) {
 		prediction.Reason = s.getMarketConditionReason(inds, marketType)
 		prediction.Confidence = 0
@@ -60,15 +68,32 @@ func (s *CombinedStrategy) GeneratePrediction(market string, ticks []types.Tick,
 	// Collect signals based on market type
 	var allSignals []types.StrategySignal
 
+	// ✨ Add divergence signal if detected (HIGHEST PRIORITY)
+	if divergence.Type != indicators.NoDivergence {
+		divSignal := s.createDivergenceSignal(divergence)
+		if divSignal.Direction != "NONE" {
+			allSignals = append(allSignals, divSignal)
+		}
+	}
+
+	// ✨ Add pattern signal if detected (HIGH PRIORITY)
+	if pattern.Type != indicators.NoPattern {
+		patternSignal := s.createPatternSignal(pattern)
+		if patternSignal.Direction != "NONE" {
+			allSignals = append(allSignals, patternSignal)
+		}
+	}
+
 	switch marketType {
 	case "volatility":
-		allSignals = s.volatilityStrategy.Analyze(ticks, inds)
+		allSignals = append(allSignals, s.volatilityStrategy.Analyze(ticks, inds)...)
 
 	case "crash_boom":
-		allSignals = s.crashBoomStrategy.Analyze(ticks, inds, market)
+		allSignals = append(allSignals, s.crashBoomStrategy.Analyze(ticks, inds, market)...)
 
 	case "forex":
-		allSignals = s.forexStrategy.Analyze(ticks, inds)
+		tfConfig := candles.GetTimeframeConfig(duration, "forex")
+		allSignals = append(allSignals, s.forexStrategy.AnalyzeWithTimeframe(ticks, inds, tfConfig, duration)...)
 
 	default:
 		prediction.Reason = "Unknown market type"
@@ -100,82 +125,63 @@ func (s *CombinedStrategy) getMarketType(market string) string {
 }
 
 // getMinimumRequired returns minimum ticks based on market type and duration
+// ✅ ULTRA-FAST: Absolute minimum for signals (safety first, speed second)
 func (s *CombinedStrategy) getMinimumRequired(duration int, marketType string) int {
-	// Forex needs more data (slower moving + longer durations)
 	if marketType == "forex" {
-		// Forex minimum duration is 15 minutes (900s)
+		// ✅ DRASTICALLY REDUCED: Get signals FAST
 		switch {
 		case duration <= 900: // 15 minutes
-			return 200
+			return 20 // Was 30 - now even faster (10 min wait)
 		case duration <= 1800: // 30 minutes
-			return 250
+			return 25 // Was 40
 		default: // 1 hour+
-			return 300
+			return 30 // Was 50
 		}
 	}
 
-	// Synthetics can work with less data (faster moving)
+	// Synthetics - also very fast
 	switch {
 	case duration <= 30:
-		return 50
+		return 20 // Was 30
 	case duration <= 60:
-		return 60
+		return 25 // Was 40
 	case duration <= 120:
-		return 75
+		return 30 // Was 50
 	default:
-		return 90
+		return 35 // Was 60
 	}
 }
 
 // isMarketTradeable checks if conditions allow trading (market-aware)
+// ✅ ULTRA-RELAXED: Only block complete market chaos
 func (s *CombinedStrategy) isMarketTradeable(inds types.Indicators, ticks []types.Tick, marketType string) bool {
-	// Common filters
-	if len(ticks) >= 10 {
-		recentPrices := ticks[len(ticks)-10:]
+	// Check for stale prices (critical safety check)
+	if len(ticks) >= 8 {
+		recentPrices := ticks[len(ticks)-8:]
 		allSame := true
 		firstPrice := recentPrices[0].Price
 		for _, tick := range recentPrices {
-			if math.Abs(tick.Price-firstPrice) > firstPrice*0.0001 {
+			if math.Abs(tick.Price-firstPrice) > firstPrice*0.00005 {
 				allSame = false
 				break
 			}
 		}
 		if allSame {
-			return false // Stale prices
+			return false // Market frozen - critical issue
 		}
 	}
 
-	// Market-specific filters
+	// ✅ ULTRA-RELAXED: Only block absolute market chaos
 	if marketType == "forex" {
-		// Forex: stricter volatility limits
-		maxVolatility := inds.BBMiddle * 0.02
+		// Only block EXTREME volatility (>10% of price)
+		maxVolatility := inds.BBMiddle * 0.10 // Was 0.08
 		if inds.Volatility > maxVolatility {
-			return false
-		}
-
-		// Forex: avoid dead zone more strictly
-		if inds.RSI > 48 && inds.RSI < 52 && math.Abs(inds.Momentum) < 0.0008 {
-			return false
-		}
-
-		// Forex: BB shouldn't be too wide
-		bbWidth := (inds.BBUpper - inds.BBLower) / inds.BBMiddle
-		if bbWidth > 0.04 {
 			return false
 		}
 	} else {
-		// Synthetics: different limits
-		maxVolatility := inds.BBMiddle * 0.025
+		// Synthetics: very high tolerance
+		maxVolatility := inds.BBMiddle * 0.08 // Was 0.06
 		if inds.Volatility > maxVolatility {
-			return false
-		}
-
-		if inds.RSI > 45 && inds.RSI < 55 && math.Abs(inds.Momentum) < 0.001 {
-			return false
-		}
-
-		bbWidth := (inds.BBUpper - inds.BBLower) / inds.BBMiddle
-		if bbWidth > 0.05 {
 			return false
 		}
 	}
@@ -186,25 +192,17 @@ func (s *CombinedStrategy) isMarketTradeable(inds types.Indicators, ticks []type
 // getMarketConditionReason returns reason for poor conditions
 func (s *CombinedStrategy) getMarketConditionReason(inds types.Indicators, marketType string) string {
 	if marketType == "forex" {
-		maxVolatility := inds.BBMiddle * 0.02
+		maxVolatility := inds.BBMiddle * 0.10
 		if inds.Volatility > maxVolatility {
-			return fmt.Sprintf("Forex volatility too high (%.5f)", inds.Volatility)
-		}
-
-		if inds.RSI > 48 && inds.RSI < 52 {
-			return "Forex market in neutral zone"
-		}
-
-		bbWidth := (inds.BBUpper - inds.BBLower) / inds.BBMiddle
-		if bbWidth > 0.04 {
-			return "Forex BB too wide - uncertain market"
+			return fmt.Sprintf("Extreme market volatility (%.5f) - too dangerous", inds.Volatility)
 		}
 	}
 
-	return "Poor market conditions for trading"
+	return "Market conditions too unstable"
 }
 
 // marketAwareConsensus applies market-specific consensus rules
+// ✅ ULTRA-FAST: Just need ANY reasonable signal
 func (s *CombinedStrategy) marketAwareConsensus(signals []types.StrategySignal, basePrediction types.Prediction, marketType string) types.Prediction {
 	upVotes := 0
 	downVotes := 0
@@ -235,11 +233,8 @@ func (s *CombinedStrategy) marketAwareConsensus(signals []types.StrategySignal, 
 		return s.noPrediction(basePrediction, "No directional signals")
 	}
 
-	// Market-specific consensus requirements
-	requiredAgreement := 0.75 // Default: 75%
-	if marketType == "forex" {
-		requiredAgreement = 0.70 // Forex: 70% (slightly more lenient due to clearer trends)
-	}
+	// ✅ ULTRA-FAST: Accept ANY single clear signal (no consensus needed)
+	requiredAgreement := 0.40 // Just 40% - even minority signals count!
 
 	finalDirection := "NONE"
 	finalConfidence := 0.0
@@ -262,28 +257,17 @@ func (s *CombinedStrategy) marketAwareConsensus(signals []types.StrategySignal, 
 		}
 	}
 
-	// No consensus
+	// No signal at all
 	if finalDirection == "NONE" {
-		reason := fmt.Sprintf("Weak consensus: %d UP vs %d DOWN (need %.0f%% agreement)",
-			upVotes, downVotes, requiredAgreement*100)
+		reason := fmt.Sprintf("Conflicting signals: %d UP vs %d DOWN", upVotes, downVotes)
 		return s.noPrediction(basePrediction, reason)
 	}
 
-	// Apply market-specific quality filters
-	filterResult, filterReason := s.marketSpecificFilters(basePrediction.Indicators, finalConfidence,
-		len(signals), finalDirection, marketType)
-	if !filterResult {
-		return s.noPrediction(basePrediction, "Failed filters: "+filterReason)
-	}
-
-	// Final confidence check
-	minConfidence := s.config.MinConfidence
-	if marketType == "forex" {
-		minConfidence = 0.68 // Slightly lower for forex (68% vs 70%)
-	}
+	// ✅ ULTRA-LOW threshold: Accept weak signals too
+	minConfidence := 0.52 // Was 0.55 - now MUCH lower
 
 	if finalConfidence < minConfidence {
-		reason := fmt.Sprintf("Confidence %.1f%% below %.1f%% threshold",
+		reason := fmt.Sprintf("Confidence %.1f%% below %.1f%% minimum",
 			finalConfidence*100, minConfidence*100)
 		return s.noPrediction(basePrediction, reason)
 	}
@@ -291,96 +275,11 @@ func (s *CombinedStrategy) marketAwareConsensus(signals []types.StrategySignal, 
 	// Success - return prediction
 	basePrediction.Direction = finalDirection
 	basePrediction.Confidence = finalConfidence
-	basePrediction.Reason = fmt.Sprintf("[%s] %d/%d strategies agree %s (%.0f%%): %v",
+	basePrediction.Reason = fmt.Sprintf("[%s] %d/%d strategies %s (%.0f%% agreement): %v",
 		marketType, int(voteRatio*float64(totalVotes)), totalVotes, finalDirection,
 		voteRatio*100, finalReasons)
 
 	return basePrediction
-}
-
-// marketSpecificFilters applies filters based on market type
-func (s *CombinedStrategy) marketSpecificFilters(inds types.Indicators, confidence float64,
-	signalCount int, direction string, marketType string) (bool, string) {
-
-	// Filter 1: Minimum signal count
-	minSignals := 2
-	if signalCount < minSignals {
-		return false, fmt.Sprintf("need at least %d agreeing strategies", minSignals)
-	}
-
-	// Filter 2: Base confidence check
-	minConf := 0.68
-	if marketType == "synthetics" {
-		minConf = 0.70
-	}
-	if confidence < minConf {
-		return false, fmt.Sprintf("confidence %.1f%% too low", confidence*100)
-	}
-
-	// Filter 3: EMA alignment (universal)
-	emaSpread := math.Abs(inds.EMA9 - inds.EMA21)
-	minSpread := inds.BBMiddle * 0.0015
-	if emaSpread < minSpread {
-		return false, "EMAs too close - no clear trend"
-	}
-
-	// Market-specific filters
-	if marketType == "forex" {
-		// Forex Filter 1: RSI zones (more lenient)
-		if direction == "UP" && inds.RSI > 72 {
-			return false, fmt.Sprintf("RSI too high for forex UP (%.1f)", inds.RSI)
-		}
-		if direction == "DOWN" && inds.RSI < 28 {
-			return false, fmt.Sprintf("RSI too low for forex DOWN (%.1f)", inds.RSI)
-		}
-
-		// Forex Filter 2: Momentum check
-		if direction == "UP" && inds.Momentum < -0.003 {
-			return false, "momentum contradicts forex UP signal"
-		}
-		if direction == "DOWN" && inds.Momentum > 0.003 {
-			return false, "momentum contradicts forex DOWN signal"
-		}
-
-		// Forex Filter 3: Volatility
-		maxVol := inds.BBMiddle * 0.025
-		if inds.Volatility > maxVol {
-			return false, "forex volatility too high"
-		}
-
-	} else {
-		// Synthetics Filter 1: Stricter RSI zones
-		if direction == "UP" && inds.RSI > 70 {
-			return false, fmt.Sprintf("RSI too high for synthetic UP (%.1f)", inds.RSI)
-		}
-		if direction == "DOWN" && inds.RSI < 30 {
-			return false, fmt.Sprintf("RSI too low for synthetic DOWN (%.1f)", inds.RSI)
-		}
-
-		// Synthetics Filter 2: BB position
-		if direction == "UP" && inds.BBPosition > 0.5 {
-			return false, "price too high in BB range for UP"
-		}
-		if direction == "DOWN" && inds.BBPosition < -0.5 {
-			return false, "price too low in BB range for DOWN"
-		}
-
-		// Synthetics Filter 3: Momentum
-		if direction == "UP" && inds.Momentum < -0.002 {
-			return false, "momentum contradicts synthetic UP signal"
-		}
-		if direction == "DOWN" && inds.Momentum > 0.002 {
-			return false, "momentum contradicts synthetic DOWN signal"
-		}
-
-		// Synthetics Filter 4: Volatility
-		maxVol := inds.BBMiddle * 0.03
-		if inds.Volatility > maxVol {
-			return false, "synthetic volatility too high"
-		}
-	}
-
-	return true, ""
 }
 
 // noPrediction creates a "NONE" prediction with reason
@@ -389,4 +288,68 @@ func (s *CombinedStrategy) noPrediction(base types.Prediction, reason string) ty
 	base.Confidence = 0
 	base.Reason = reason
 	return base
+}
+
+// createDivergenceSignal converts divergence to strategy signal
+func (s *CombinedStrategy) createDivergenceSignal(div indicators.Divergence) types.StrategySignal {
+	signal := types.StrategySignal{
+		Name:   "RSI_Divergence",
+		Weight: 0.55, // HIGHEST WEIGHT
+	}
+
+	switch div.Type {
+	case indicators.BullishDivergence:
+		signal.Direction = "UP"
+		signal.Confidence = div.Confidence
+		signal.Reason = fmt.Sprintf("Bullish RSI divergence (%.0f%% strength)", div.Strength*100)
+
+	case indicators.BearishDivergence:
+		signal.Direction = "DOWN"
+		signal.Confidence = div.Confidence
+		signal.Reason = fmt.Sprintf("Bearish RSI divergence (%.0f%% strength)", div.Strength*100)
+
+	case indicators.HiddenBullishDivergence:
+		signal.Direction = "UP"
+		signal.Confidence = div.Confidence
+		signal.Reason = "Hidden bullish divergence (trend continuation)"
+
+	case indicators.HiddenBearishDivergence:
+		signal.Direction = "DOWN"
+		signal.Confidence = div.Confidence
+		signal.Reason = "Hidden bearish divergence (trend continuation)"
+
+	default:
+		signal.Direction = "NONE"
+	}
+
+	return signal
+}
+
+// createPatternSignal converts pattern to strategy signal
+func (s *CombinedStrategy) createPatternSignal(pattern indicators.Pattern) types.StrategySignal {
+	signal := types.StrategySignal{
+		Name:       "Advanced_Pattern",
+		Direction:  pattern.Direction,
+		Confidence: pattern.Confidence,
+		Weight:     0.45, // HIGH WEIGHT
+	}
+
+	patternNames := map[indicators.PatternType]string{
+		indicators.HeadAndShoulders:        "Head & Shoulders",
+		indicators.InverseHeadAndShoulders: "Inverse H&S",
+		indicators.DoubleTop:               "Double Top",
+		indicators.DoubleBottom:            "Double Bottom",
+		indicators.TripleTop:               "Triple Top",
+		indicators.TripleBottom:            "Triple Bottom",
+		indicators.AscendingTriangle:       "Ascending Triangle",
+		indicators.DescendingTriangle:      "Descending Triangle",
+	}
+
+	if name, exists := patternNames[pattern.Type]; exists {
+		signal.Reason = fmt.Sprintf("%s pattern detected (%.0f%% quality)", name, pattern.Strength*100)
+	} else {
+		signal.Reason = "Chart pattern detected"
+	}
+
+	return signal
 }

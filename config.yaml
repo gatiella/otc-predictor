@@ -1,114 +1,118 @@
-# OTC Predictor Configuration - MULTI-MODE SYSTEM
-# Dashboard allows switching between modes, but you can set default here
+# OTC Predictor Configuration - ULTRA FAST MODE
+# ⚡ Optimized for FASTEST possible signals while maintaining safety
 
-# Default Mode (dashboard can filter any mode)
-# Options: "synthetics", "forex", "both"
-# Set to "both" to enable all markets and let dashboard filter
-mode: "both"
+# Default Mode
+mode: "forex"  # Start with forex only for testing
 
-# Synthetic Indices Markets
+# ============================================
+# FOREX MAJOR PAIRS (Start with liquid pairs)
+# ============================================
+forex_markets:
+  # Most Liquid USD Majors (start here)
+  - frxEURUSD    # EUR/USD - Most liquid, fastest signals
+  - frxGBPUSD    # GBP/USD - Very liquid
+  - frxUSDJPY    # USD/JPY - High volume
+  - frxAUDUSD    # AUD/USD - Popular
+  - frxUSDCAD    # USD/CAD - North America
+  
+  # Major Cross Pairs
+  - frxEURGBP    # EUR/GBP - Liquid cross
+  - frxGBPJPY    # GBP/JPY - Volatile
+  - frxEURJPY    # EUR/JPY - Trending
+
+# ============================================
+# SYNTHETIC INDICES (11 markets)
+# ============================================
 synthetic_markets:
-  - volatility_10_1s
-  - volatility_25_1s
-  - volatility_50_1s
-  - volatility_75_1s
-  - volatility_100_1s
+  # Volatility Indices (fast ticking)
+  - volatility_10_1s      # V10 - 1 tick/second
+  - volatility_25_1s      # V25 - 1 tick/second
+  - volatility_50_1s      # V50 - 1 tick/second
+  - volatility_75_1s      # V75 - 1 tick/second
+  - volatility_100_1s     # V100 - 1 tick/second
+  
+  # Crash Indices
   - crash_300_1s
   - crash_500_1s
   - crash_1000_1s
+  
+  # Boom Indices
   - boom_300_1s
   - boom_500_1s
   - boom_1000_1s
 
-# Forex Markets
-forex_markets:
-  - frxAUDJPY
-  - frxEURAUD
-  - frxEURCAD
-  - frxEURCHF
-  - frxEURGBP
-  - frxEURUSD
-  - frxGBPAUD
-  - frxGBPJPY
-  - frxGBPUSD
-  - frxUSDCAD
-  - frxUSDCHF
-  - frxUSDJPY
-
 # Data source (Deriv.com WebSocket API)
 datasource:
   api_url: "wss://ws.derivws.com/websockets/v3?app_id=1089"
-  api_token: ""  # Optional: Add your token here for authenticated features
+  api_token: ""
   reconnect_delay: 5
   ping_interval: 25
 
-# Strategy Parameters
+# Strategy Parameters - ULTRA FAST
 strategy:
-  # Global minimum confidence
-  min_confidence: 0.70
-
-  # Technical Indicators (shared by all strategies)
-  rsi_period: 14
-  rsi_overbought: 72
-  rsi_oversold: 28
+  min_confidence: 0.50  # Lower threshold for faster signals
   
+  # Technical Indicators
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  
+  # EMA periods
   ema_fast: 9
   ema_slow: 21
   ema_trend: 50
   
+  # Bollinger Bands
   bb_period: 20
   bb_std_dev: 2.0
-
+  
   # Synthetics Strategy Weights
   volatility:
     mean_reversion_weight: 0.45
     momentum_weight: 0.35
     pattern_weight: 0.20
-
+  
   crash_boom:
     spike_detection_weight: 0.50
     trend_weight: 0.30
     volatility_weight: 0.20
-
-  # Forex Strategy Weights
+  
+  # Forex Strategy Weights - RELAXED
   forex:
     trend_following_weight: 0.40
-    support_resistance_weight: 0.35
-    ema_crossover_weight: 0.35
-    pullback_weight: 0.30
-    range_weight: 0.25
+    support_resistance_weight: 0.30
+    ema_crossover_weight: 0.30
+    pullback_weight: 0.25
+    range_weight: 0.20
 
-# Risk Management
+# Risk Management - ULTRA FAST MODE
 risk:
-  # Global defaults (if specific settings not found)
-  max_predictions_per_minute: 30
-  min_ticks_required: 60
-  skip_high_volatility_threshold: 0.03
-  max_spread_pips: 2.5
-  
-  # Synthetics-specific settings
-  synthetics:
-    max_predictions_per_minute: 30
-    min_ticks_required: 60
-    skip_high_volatility_threshold: 0.03
-    preferred_duration: 60  # 1 minute (best for synthetics)
-  
-  # Forex-specific settings
-  forex:
-    max_predictions_per_minute: 20
-    min_ticks_required: 200  # Need more data for 15min predictions
-    skip_high_volatility_threshold: 0.025
-    preferred_duration: 900  # 15 minutes (MINIMUM for forex on Deriv)
-    
-    # Forex session filters
-    avoid_asian_session: true          # Avoid 00:00-07:00 UTC (low volume)
-    boost_london_ny_overlap: true      # Boost confidence 12:00-16:00 UTC
+  max_predictions_per_minute: 15  # More frequent
+  min_ticks_required: 20  # MUCH lower
+  skip_high_volatility_threshold: 0.10  # Very relaxed
+  max_spread_pips: 3.0
+
+# Synthetics-specific settings
+synthetics:
+  max_predictions_per_minute: 15
+  min_ticks_required: 20  # Fast signals
+  skip_high_volatility_threshold: 0.08
+  preferred_duration: 60
+
+# Forex-specific settings - ULTRA FAST
+forex:
+  max_predictions_per_minute: 15
+  min_ticks_required: 15  # ⚡ ULTRA LOW - signals in ~8-10 minutes
+  skip_high_volatility_threshold: 0.10
+  preferred_duration: 900
+  avoid_asian_session: false
+  boost_london_ny_overlap: true
 
 # Storage
 storage:
-  max_ticks_in_memory: 500    # Per market
+  max_ticks_in_memory: 500
   keep_predictions_hours: 12
-  auto_cleanup_interval: 1800  # 30 minutes
+  auto_cleanup_interval: 1800
 
 # API Server
 api:
@@ -116,17 +120,24 @@ api:
   port: 8080
   enable_cors: true
   websocket_enabled: true
-  max_connections: 50
+  max_connections: 100
 
 # Logging
 logging:
-  level: "info"  # debug, info, warn, error
+  level: "info"
   file: "otc-predictor.log"
   console: true
 
 # Performance Tracking
 tracking:
-  calculate_stats_interval: 60  # seconds
-  min_trades_for_stats: 5
+  calculate_stats_interval: 60
+  min_trades_for_stats: 3  # Lower for faster feedback
   display_recent_trades: 20
-  separate_stats_by_type: true  # Separate forex vs synthetics stats
+  separate_stats_by_type: true
+
+# ⚡ ULTRA FAST MODE SETTINGS:
+# - Min ticks: 15-20 (down from 30-60)
+# - Confidence: 50% minimum (down from 58%)
+# - Expected first signal: 8-12 minutes after start
+# - Forex tick rate: 1-5 ticks/min = need 15-20 ticks = 3-20 min wait
+# - Update frequency: Every 20-45 seconds on dashboard

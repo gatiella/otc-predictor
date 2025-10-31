@@ -10,7 +10,7 @@ type Tick struct {
 	Epoch     int64     `json:"epoch"`
 }
 
-// Candle represents OHLCV data (optional, for aggregation)
+// Candle represents OHLCV data for timeframe analysis
 type Candle struct {
 	Market    string    `json:"market"`
 	Open      float64   `json:"open"`

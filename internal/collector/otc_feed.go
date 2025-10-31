@@ -66,6 +66,8 @@ func NewOTCCollector(storage *storage.MemoryStorage, config types.DataSourceConf
 		batches = append(batches, markets[i:end])
 	}
 
+	log.Printf("📊 Total markets: %d, Batches: %d", len(markets), len(batches))
+
 	return &OTCCollector{
 		storage:       storage,
 		config:        config,
@@ -81,6 +83,7 @@ func NewOTCCollector(storage *storage.MemoryStorage, config types.DataSourceConf
 // Start begins collecting data
 func (c *OTCCollector) Start() error {
 	log.Println("🚀 Starting multi-market data collector...")
+	log.Printf("📈 Subscribing to %d markets in %d batches", len(c.markets), len(c.marketBatches))
 
 	// Start connection manager for each batch
 	for batchIdx, batch := range c.marketBatches {
@@ -147,7 +150,7 @@ func (c *OTCCollector) connectBatch(connKey string, markets []string) error {
 	c.connections[connKey] = conn
 	c.connMu.Unlock()
 
-	log.Printf("✅ Connected to Deriv WebSocket API (%s)", connKey)
+	log.Printf("✅ Connected to Deriv WebSocket API (%s) - %d markets", connKey, len(markets))
 
 	// Start ping/pong to keep connection alive
 	go c.keepAlive(connKey)
@@ -286,9 +289,10 @@ func (c *OTCCollector) keepAlive(connKey string) {
 }
 
 // marketToSymbol converts our market name to Deriv symbol
+// ✅ UPDATED: Added ALL 39 markets
 func (c *OTCCollector) marketToSymbol(market string) string {
 	symbolMap := map[string]string{
-		// Synthetic indices
+		// Synthetic indices (11)
 		"volatility_10_1s":  "R_10",
 		"volatility_25_1s":  "R_25",
 		"volatility_50_1s":  "R_50",
@@ -301,33 +305,58 @@ func (c *OTCCollector) marketToSymbol(market string) string {
 		"boom_500_1s":       "BOOM500",
 		"boom_1000_1s":      "BOOM1000",
 
-		// Forex pairs
-		"frxAUDJPY": "frxAUDJPY",
-		"frxEURAUD": "frxEURAUD",
-		"frxEURCAD": "frxEURCAD",
-		"frxEURCHF": "frxEURCHF",
-		"frxEURGBP": "frxEURGBP",
+		// Forex pairs (28) - USD Majors
 		"frxEURUSD": "frxEURUSD",
-		"frxGBPAUD": "frxGBPAUD",
-		"frxGBPJPY": "frxGBPJPY",
 		"frxGBPUSD": "frxGBPUSD",
-		"frxUSDCAD": "frxUSDCAD",
-		"frxUSDCHF": "frxUSDCHF",
 		"frxUSDJPY": "frxUSDJPY",
+		"frxUSDCHF": "frxUSDCHF",
+		"frxUSDCAD": "frxUSDCAD",
+		"frxAUDUSD": "frxAUDUSD",
+		"frxNZDUSD": "frxNZDUSD",
+		"frxUSDNOK": "frxUSDNOK",
+
+		// EUR Cross Pairs
+		"frxEURGBP": "frxEURGBP",
+		"frxEURJPY": "frxEURJPY",
+		"frxEURCHF": "frxEURCHF",
+		"frxEURCAD": "frxEURCAD",
+		"frxEURAUD": "frxEURAUD",
+		"frxEURNZD": "frxEURNZD",
+		"frxEURNOK": "frxEURNOK",
+
+		// GBP Cross Pairs
+		"frxGBPJPY": "frxGBPJPY",
+		"frxGBPCHF": "frxGBPCHF",
+		"frxGBPCAD": "frxGBPCAD",
+		"frxGBPAUD": "frxGBPAUD",
+		"frxGBPNZD": "frxGBPNZD",
+		"frxGBPNOK": "frxGBPNOK",
+
+		// AUD Cross Pairs
+		"frxAUDJPY": "frxAUDJPY",
+		"frxAUDCAD": "frxAUDCAD",
+		"frxAUDCHF": "frxAUDCHF",
+		"frxAUDNZD": "frxAUDNZD",
+
+		// Other Cross Pairs
+		"frxNZDJPY": "frxNZDJPY",
+		"frxCADJPY": "frxCADJPY",
+		"frxCHFJPY": "frxCHFJPY",
 	}
 
 	if symbol, exists := symbolMap[market]; exists {
 		return symbol
 	}
 
-	// If not found, return as-is (might be a custom format)
+	// If not found, return as-is
 	return market
 }
 
 // symbolToMarket converts Deriv symbol to our market name
+// ✅ UPDATED: Added ALL 39 markets
 func (c *OTCCollector) symbolToMarket(symbol string) string {
 	marketMap := map[string]string{
-		// Synthetic indices
+		// Synthetic indices (11)
 		"R_10":      "volatility_10_1s",
 		"R_25":      "volatility_25_1s",
 		"R_50":      "volatility_50_1s",
@@ -340,19 +369,43 @@ func (c *OTCCollector) symbolToMarket(symbol string) string {
 		"BOOM500":   "boom_500_1s",
 		"BOOM1000":  "boom_1000_1s",
 
-		// Forex pairs (direct mapping)
-		"frxAUDJPY": "frxAUDJPY",
-		"frxEURAUD": "frxEURAUD",
-		"frxEURCAD": "frxEURCAD",
-		"frxEURCHF": "frxEURCHF",
-		"frxEURGBP": "frxEURGBP",
+		// Forex pairs (28) - USD Majors
 		"frxEURUSD": "frxEURUSD",
-		"frxGBPAUD": "frxGBPAUD",
-		"frxGBPJPY": "frxGBPJPY",
 		"frxGBPUSD": "frxGBPUSD",
-		"frxUSDCAD": "frxUSDCAD",
-		"frxUSDCHF": "frxUSDCHF",
 		"frxUSDJPY": "frxUSDJPY",
+		"frxUSDCHF": "frxUSDCHF",
+		"frxUSDCAD": "frxUSDCAD",
+		"frxAUDUSD": "frxAUDUSD",
+		"frxNZDUSD": "frxNZDUSD",
+		"frxUSDNOK": "frxUSDNOK",
+
+		// EUR Cross Pairs
+		"frxEURGBP": "frxEURGBP",
+		"frxEURJPY": "frxEURJPY",
+		"frxEURCHF": "frxEURCHF",
+		"frxEURCAD": "frxEURCAD",
+		"frxEURAUD": "frxEURAUD",
+		"frxEURNZD": "frxEURNZD",
+		"frxEURNOK": "frxEURNOK",
+
+		// GBP Cross Pairs
+		"frxGBPJPY": "frxGBPJPY",
+		"frxGBPCHF": "frxGBPCHF",
+		"frxGBPCAD": "frxGBPCAD",
+		"frxGBPAUD": "frxGBPAUD",
+		"frxGBPNZD": "frxGBPNZD",
+		"frxGBPNOK": "frxGBPNOK",
+
+		// AUD Cross Pairs
+		"frxAUDJPY": "frxAUDJPY",
+		"frxAUDCAD": "frxAUDCAD",
+		"frxAUDCHF": "frxAUDCHF",
+		"frxAUDNZD": "frxAUDNZD",
+
+		// Other Cross Pairs
+		"frxNZDJPY": "frxNZDJPY",
+		"frxCADJPY": "frxCADJPY",
+		"frxCHFJPY": "frxCHFJPY",
 	}
 
 	if market, exists := marketMap[symbol]; exists {

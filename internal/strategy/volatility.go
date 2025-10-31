@@ -53,7 +53,7 @@ func (s *VolatilityStrategy) Analyze(ticks []types.Tick, inds types.Indicators) 
 		signals = append(signals, rsiSignal)
 	}
 
-	// Strategy 5: EMA Crossover (NEW - strong signal)
+	// Strategy 5: EMA Crossover (strong signal)
 	crossoverSignal := s.emaCrossoverSignal(ticks, inds)
 	if crossoverSignal.Direction != "NONE" {
 		signals = append(signals, crossoverSignal)
@@ -63,28 +63,29 @@ func (s *VolatilityStrategy) Analyze(ticks []types.Tick, inds types.Indicators) 
 }
 
 // meanReversionSignal - Price returns to mean (HIGHEST WEIGHT)
+// 🔧 FIXED: Adjusted confidence to match new 58% threshold
 func (s *VolatilityStrategy) meanReversionSignal(price float64, inds types.Indicators, pattern string) types.StrategySignal {
 	signal := types.StrategySignal{
 		Name:   "MeanReversion",
-		Weight: 0.45, // Increased from 0.4
+		Weight: 0.45,
 	}
 
-	// STRICT CONDITIONS: Oversold at lower band + momentum turning
-	if inds.RSI < s.config.RSIOversold && inds.BBPosition < -0.75 {
-		confidence := 0.72 // Increased base confidence
+	// ✅ FIXED: Relaxed from -0.75 to -0.70 for more signals
+	if inds.RSI < s.config.RSIOversold && inds.BBPosition < -0.70 {
+		confidence := 0.68 // Was 0.72 - adjusted down
 
 		// Pattern confirmation
 		if pattern == "double_bottom" {
-			confidence = 0.78
+			confidence = 0.74 // Was 0.78
 		}
 
 		// Extremely oversold
 		if inds.RSI < 22 && inds.BBPosition < -0.85 {
-			confidence += 0.06
+			confidence += 0.05 // Was 0.06
 		}
 
 		// Momentum turning positive
-		if inds.Momentum > -0.0005 {
+		if inds.Momentum > -0.0008 { // Was -0.0005 (more lenient)
 			confidence += 0.03
 		}
 
@@ -94,22 +95,22 @@ func (s *VolatilityStrategy) meanReversionSignal(price float64, inds types.Indic
 		return signal
 	}
 
-	// STRICT CONDITIONS: Overbought at upper band + momentum turning
-	if inds.RSI > s.config.RSIOverbought && inds.BBPosition > 0.75 {
-		confidence := 0.72
+	// ✅ FIXED: Relaxed from 0.75 to 0.70 for more signals
+	if inds.RSI > s.config.RSIOverbought && inds.BBPosition > 0.70 {
+		confidence := 0.68 // Was 0.72
 
 		// Pattern confirmation
 		if pattern == "double_top" {
-			confidence = 0.78
+			confidence = 0.74 // Was 0.78
 		}
 
 		// Extremely overbought
 		if inds.RSI > 78 && inds.BBPosition > 0.85 {
-			confidence += 0.06
+			confidence += 0.05 // Was 0.06
 		}
 
 		// Momentum turning negative
-		if inds.Momentum < 0.0005 {
+		if inds.Momentum < 0.0008 { // Was 0.0005
 			confidence += 0.03
 		}
 
@@ -123,27 +124,28 @@ func (s *VolatilityStrategy) meanReversionSignal(price float64, inds types.Indic
 	return signal
 }
 
-// momentumSignal - Clear trend following (STRICTER)
+// momentumSignal - Clear trend following
+// 🔧 FIXED: Adjusted for new confidence threshold
 func (s *VolatilityStrategy) momentumSignal(inds types.Indicators) types.StrategySignal {
 	signal := types.StrategySignal{
 		Name:   "Momentum",
-		Weight: 0.35, // Increased from 0.3
+		Weight: 0.35,
 	}
 
-	// Bullish: Strong EMA alignment + not overbought + momentum
+	// ✅ FIXED: Relaxed RSI range (48-62 → 45-65)
 	if inds.EMA9 > inds.EMA21 && inds.EMA21 > inds.EMA50 &&
-		inds.RSI < 62 && inds.RSI > 48 && inds.Momentum > 0.002 {
+		inds.RSI < 65 && inds.RSI > 45 && inds.Momentum > 0.0015 { // Was 0.002
 
-		confidence := 0.68
+		confidence := 0.64 // Was 0.68
 
 		// Strong trend confirmation
-		if inds.TrendStrength > 0.75 {
-			confidence = 0.73
+		if inds.TrendStrength > 0.70 { // Was 0.75
+			confidence = 0.69 // Was 0.73
 		}
 
 		// Price above all EMAs
 		emaDistance := (inds.EMA9 - inds.EMA50) / inds.EMA50
-		if emaDistance > 0.003 {
+		if emaDistance > 0.0025 { // Was 0.003
 			confidence += 0.04
 		}
 
@@ -153,20 +155,20 @@ func (s *VolatilityStrategy) momentumSignal(inds types.Indicators) types.Strateg
 		return signal
 	}
 
-	// Bearish: Strong EMA alignment + not oversold + momentum
+	// ✅ FIXED: Relaxed RSI range (38-52 → 35-55)
 	if inds.EMA9 < inds.EMA21 && inds.EMA21 < inds.EMA50 &&
-		inds.RSI > 38 && inds.RSI < 52 && inds.Momentum < -0.002 {
+		inds.RSI > 35 && inds.RSI < 55 && inds.Momentum < -0.0015 { // Was -0.002
 
-		confidence := 0.68
+		confidence := 0.64 // Was 0.68
 
 		// Strong trend confirmation
-		if inds.TrendStrength > 0.75 {
-			confidence = 0.73
+		if inds.TrendStrength > 0.70 { // Was 0.75
+			confidence = 0.69 // Was 0.73
 		}
 
 		// Price below all EMAs
 		emaDistance := (inds.EMA50 - inds.EMA9) / inds.EMA50
-		if emaDistance > 0.003 {
+		if emaDistance > 0.0025 { // Was 0.003
 			confidence += 0.04
 		}
 
@@ -181,15 +183,16 @@ func (s *VolatilityStrategy) momentumSignal(inds types.Indicators) types.Strateg
 }
 
 // bollingerBandSignal - Trading at extreme bands
+// 🔧 FIXED: Adjusted thresholds
 func (s *VolatilityStrategy) bollingerBandSignal(price float64, inds types.Indicators) types.StrategySignal {
 	signal := types.StrategySignal{
 		Name:   "BollingerBands",
-		Weight: 0.25, // Increased from 0.2
+		Weight: 0.25,
 	}
 
-	// At lower band - expect bounce
-	if inds.BBPosition < -0.85 && price < inds.BBLower {
-		confidence := 0.69
+	// ✅ FIXED: Relaxed from -0.85 to -0.80
+	if inds.BBPosition < -0.80 && price < inds.BBLower {
+		confidence := 0.65 // Was 0.69
 
 		// RSI confirms oversold
 		if inds.RSI < 35 {
@@ -202,9 +205,9 @@ func (s *VolatilityStrategy) bollingerBandSignal(price float64, inds types.Indic
 		return signal
 	}
 
-	// At upper band - expect pullback
-	if inds.BBPosition > 0.85 && price > inds.BBUpper {
-		confidence := 0.69
+	// ✅ FIXED: Relaxed from 0.85 to 0.80
+	if inds.BBPosition > 0.80 && price > inds.BBUpper {
+		confidence := 0.65 // Was 0.69
 
 		// RSI confirms overbought
 		if inds.RSI > 65 {
@@ -217,19 +220,19 @@ func (s *VolatilityStrategy) bollingerBandSignal(price float64, inds types.Indic
 		return signal
 	}
 
-	// BB Squeeze breakout (lower priority)
+	// BB Squeeze breakout
 	bbWidth := (inds.BBUpper - inds.BBLower) / inds.BBMiddle
-	if bbWidth < 0.015 {
-		if price > inds.BBMiddle && inds.Momentum > 0.003 {
+	if bbWidth < 0.018 { // Was 0.015 - more lenient
+		if price > inds.BBMiddle && inds.Momentum > 0.0025 { // Was 0.003
 			signal.Direction = "UP"
-			signal.Confidence = 0.66
+			signal.Confidence = 0.62 // Was 0.66
 			signal.Reason = "BB squeeze breakout upward"
 			return signal
 		}
 
-		if price < inds.BBMiddle && inds.Momentum < -0.003 {
+		if price < inds.BBMiddle && inds.Momentum < -0.0025 { // Was -0.003
 			signal.Direction = "DOWN"
-			signal.Confidence = 0.66
+			signal.Confidence = 0.62 // Was 0.66
 			signal.Reason = "BB squeeze breakout downward"
 			return signal
 		}
@@ -240,34 +243,35 @@ func (s *VolatilityStrategy) bollingerBandSignal(price float64, inds types.Indic
 }
 
 // rsiSignal - RSI at true extremes with confirmation
+// 🔧 FIXED: Adjusted for new threshold
 func (s *VolatilityStrategy) rsiSignal(inds types.Indicators, ticks []types.Tick) types.StrategySignal {
 	signal := types.StrategySignal{
 		Name:   "RSI",
-		Weight: 0.15, // Increased from 0.1
+		Weight: 0.15,
 	}
 
 	// Check RSI trend (is it turning?)
 	rsiTurning := false
 	if len(ticks) > s.config.RSIPeriod+5 {
 		prevInds := indicators.CalculateAllIndicators(ticks[:len(ticks)-5], s.config)
-		if inds.RSI < 25 && prevInds.RSI < inds.RSI {
-			rsiTurning = true // RSI was falling, now rising
+		if inds.RSI < 28 && prevInds.RSI < inds.RSI { // Was 25
+			rsiTurning = true
 		}
-		if inds.RSI > 75 && prevInds.RSI > inds.RSI {
-			rsiTurning = true // RSI was rising, now falling
+		if inds.RSI > 72 && prevInds.RSI > inds.RSI { // Was 75
+			rsiTurning = true
 		}
 	}
 
-	// Extreme oversold with confirmation
-	if inds.RSI < 25 {
-		confidence := 0.66
+	// ✅ FIXED: Relaxed from 25 to 28
+	if inds.RSI < 28 {
+		confidence := 0.62 // Was 0.66
 
-		if inds.RSI < 18 {
-			confidence = 0.71 // Very extreme
+		if inds.RSI < 20 { // Was 18
+			confidence = 0.67 // Was 0.71
 		}
 
 		if rsiTurning {
-			confidence += 0.04 // RSI turning around
+			confidence += 0.04
 		}
 
 		signal.Direction = "UP"
@@ -276,16 +280,16 @@ func (s *VolatilityStrategy) rsiSignal(inds types.Indicators, ticks []types.Tick
 		return signal
 	}
 
-	// Extreme overbought with confirmation
-	if inds.RSI > 75 {
-		confidence := 0.66
+	// ✅ FIXED: Relaxed from 75 to 72
+	if inds.RSI > 72 {
+		confidence := 0.62 // Was 0.66
 
-		if inds.RSI > 82 {
-			confidence = 0.71 // Very extreme
+		if inds.RSI > 80 { // Was 82
+			confidence = 0.67 // Was 0.71
 		}
 
 		if rsiTurning {
-			confidence += 0.04 // RSI turning around
+			confidence += 0.04
 		}
 
 		signal.Direction = "DOWN"
@@ -298,33 +302,30 @@ func (s *VolatilityStrategy) rsiSignal(inds types.Indicators, ticks []types.Tick
 	return signal
 }
 
-// emaCrossoverSignal - NEW: EMA crossover detection
+// emaCrossoverSignal - EMA crossover detection
+// 🔧 FIXED: Adjusted confidence levels
 func (s *VolatilityStrategy) emaCrossoverSignal(ticks []types.Tick, inds types.Indicators) types.StrategySignal {
 	signal := types.StrategySignal{
 		Name:   "EMACrossover",
 		Weight: 0.30,
 	}
 
-	// Need enough data to check previous state
 	if len(ticks) < s.config.RSIPeriod+10 {
 		signal.Direction = "NONE"
 		return signal
 	}
 
-	// Get indicators from 5 ticks ago
 	prevInds := indicators.CalculateAllIndicators(ticks[:len(ticks)-5], s.config)
 
-	// Bullish crossover: EMA9 crosses above EMA21
+	// Bullish crossover
 	if inds.EMA9 > inds.EMA21 && prevInds.EMA9 <= prevInds.EMA21 {
-		confidence := 0.70
+		confidence := 0.66 // Was 0.70
 
-		// Stronger if RSI not overbought
-		if inds.RSI < 60 {
+		if inds.RSI < 62 { // Was 60
 			confidence += 0.04
 		}
 
-		// Stronger if momentum confirms
-		if inds.Momentum > 0.001 {
+		if inds.Momentum > 0.0008 { // Was 0.001
 			confidence += 0.03
 		}
 
@@ -334,17 +335,15 @@ func (s *VolatilityStrategy) emaCrossoverSignal(ticks []types.Tick, inds types.I
 		return signal
 	}
 
-	// Bearish crossover: EMA9 crosses below EMA21
+	// Bearish crossover
 	if inds.EMA9 < inds.EMA21 && prevInds.EMA9 >= prevInds.EMA21 {
-		confidence := 0.70
+		confidence := 0.66 // Was 0.70
 
-		// Stronger if RSI not oversold
-		if inds.RSI > 40 {
+		if inds.RSI > 38 { // Was 40
 			confidence += 0.04
 		}
 
-		// Stronger if momentum confirms
-		if inds.Momentum < -0.001 {
+		if inds.Momentum < -0.0008 { // Was -0.001
 			confidence += 0.03
 		}
 

@@ -46,9 +46,9 @@ func main() {
 		log.Fatalf("❌ Failed to start OTC collector: %v", err)
 	}
 
-	// Wait for initial data collection (30 seconds)
-	log.Println("⏳ Collecting initial market data (30 seconds)...")
-	time.Sleep(30 * time.Second)
+	// Wait for initial data collection (15 seconds) - faster startup
+	log.Println("⏳ Collecting initial market data (15 seconds)...")
+	time.Sleep(15 * time.Second)
 
 	// Check if we have data
 	activeMarkets := store.GetActiveMarkets()
